@@ -8,7 +8,7 @@ O RabbitMQ é um "Message Broker" (Intermediário de mensagens). Semelhante à u
 serviço de Correios, o Rabbit aceita, armazena e encaminha blobs binário de 
 dados (chamados de mensagens).
 
-###Termos importantes:
+### Termos importantes:
 
 - **Producer (Produtor):** Programa que produz e envia mensagens.
 - **Queue (Fila):** Fila que armazena as mensagens (buffer). Essa fila está 
@@ -25,7 +25,7 @@ mesmo tempo.
 P --> Fila --> C  
 ```
 
-###Casos de uso
+### Casos de uso
 
 - **Work queues (Filas de tarefas):** 
 
@@ -49,7 +49,7 @@ P --> Fila --> C
 
 ```commandline
 docker pull rabbitmq
-docker run -it --hostname my-rabbit --name some-rabbit -p 5672:5672 rabbitmq
+docker run -it --hostname my-rabbit --name some-rabbit -v /some-folder/in/your-computer:/var/lib/rabbitmq -p 5672:5672 rabbitmq
 ```
 
 **Obs:** Para entrar no container rodando:
@@ -132,4 +132,75 @@ conta o tempo que o worker demorar para executar a tarefa. Caso um worker
 tenha o "azar" de pegar somente tarefas demoradas, as taregas atribuídas a ele 
 podem ficar "represadas" na fila.
 
+- Para saber quantas mensagens estão "prontas" (aguardando um consumidor 
+recebê-las) e quantas foram recebidas, mas não confirmadas, usar o comando na 
+máquina rodando o broker:
 
+```commandline
+rabbitmqctl list_queues name messages_ready messages_unacknowledged
+```
+
+- Para garantir a persistência das mensagens no disco da máquina do broker, é 
+necessário criar o volume ao rodar o container.
+
+**Solcitante de tarefa (new_task.py)**
+
+```python
+import sys
+import pika
+
+connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+channel = connection.channel()
+
+# O parâmetro "durable" faz com que a fila seja gravada no disco da
+# máquina do broker, assim, mesmo que o processo morra, ela não vai ser
+# perdida.
+channel.queue_declare(queue='task_queue', durable=True)
+
+message = ' '.join(sys.argv[1:]) or 'Hello World!'
+
+# O parâmetro "properties/delivery_mode" faz com que a mensagem seja gravada
+# no disco da máquina do broker, assim, mesmo que o processo morra, ela não
+# vai ser perdida.
+channel.basic_publish(exchange='',
+                      routing_key='task_queue',
+                      body=message,
+                      properties=pika.BasicProperties(
+                         delivery_mode = 2, # make message persistent
+                      ))
+print(' [x] Sent %r' % message)
+
+connection.close()
+```
+
+**Trabalhador (worker.py)**
+
+```python
+import time
+import pika
+
+def callback(ch, method, properties, body):
+    print(' [x] Receive %r' % body)
+    time.sleep(body.count(b'.'))
+    print(' [x] Done')
+    # Enviar a confirmação somente após a tarefa ser completada garante que,
+    # se o processo morrer antes de terminar, a tarefa volta para a fila e
+    # outro worker pode pegá-la.
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
+connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+channel = connection.channel()
+
+channel.queue_declare(queue='task_queue', durable=True)
+
+# Fala para o broker não mandar mais tarefa para um worker se ele ainda não
+# tiver finalizado a tarefa anterior (mandado um ack)
+channel.basic_qos(prefetch_count=1)
+
+channel.basic_consume(queue='task_queue', on_message_callback=callback)
+
+print(' [*] Wainting for messages. To exit press CTRL+C')
+channel.start_consuming()
+```
+
+### Aula 3 (Publish/Subscribe)
