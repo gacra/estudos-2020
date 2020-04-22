@@ -25,6 +25,22 @@ mesmo tempo.
 P --> Fila --> C  
 ```
 
+Para deixar o modelo anterior mais condizente com a realidade, temos que 
+introduzir mais um termo importante:
+
+- **Exchanges (trocas):** De um lado ele recebe mensagens de produtores, de 
+outro ele coloca a mensagem em filas. O exchange pode escolher colocar a 
+mensagem em uma fila específica, em várias filas ou descartá-la. Existem 
+diversos tipos de exchages:
+    - fanout: envia as mensagens que recebe para todas as filas que conhece
+    (broadcast).
+    
+    ```
+             |-> Fila1 --> C1
+    P--> X --|
+             |-> Fila2 --> C2
+    ```
+
 ### Casos de uso
 
 - **Work queues (Filas de tarefas):** 
@@ -36,10 +52,22 @@ P --> Fila --> C
     pega a tarefa e a executa. Se houver multiplos workers, as tarefas serão 
     compartilhadas entre eles. 
     
+    Nessa abordagem, no geral, queremos ter certeza que exatamente um worker 
+    receba e execute a tarefa, nem mais, nem menos.
+    
     Isso é especialmente útil para aplicações web, quando é impossível tratar 
     uma tarefa complexa durante a curta janela de tempo da requisição HTTP. 
     Exemplos de tarefas incluem: redimencionamento de imagens; renderização de 
-    PDFs.  
+    PDFs.
+    
+- **Publish/Subscribe:**
+    
+    Uma mensagem é enviada para múltiplos consumidores (em oposição ao caso 
+    anterior em que uma tarefa é recebida e executada por apenas um worker).
+    
+    Como exemplo, podemos citar um sistema de logging. Um processo emite um 
+    log, e vários consumidores recebem esse log, cada um deles fazendo algo 
+    com ela (salvar em disco, imprimir na tela, etc). 
 
 ## Instalação
 
@@ -143,7 +171,7 @@ rabbitmqctl list_queues name messages_ready messages_unacknowledged
 - Para garantir a persistência das mensagens no disco da máquina do broker, é 
 necessário criar o volume ao rodar o container.
 
-**Solcitante de tarefa (new_task.py)**
+**Solicitante de tarefa (new_task.py)**
 
 ```python
 import sys
@@ -204,3 +232,19 @@ channel.start_consuming()
 ```
 
 ### Aula 3 (Publish/Subscribe)
+
+- Para listar os exchanges no servidor broker use o comando abaixo. O exchange 
+padrão (sem nome) e os com nome `amq*` são criados por padrão. Nas aulas 
+anteriores usamos o exchange padrão (`''`), que encaminha a mensagem para a 
+fila com o nome dado por `routing_key`, caso ela exista.
+
+```commandline
+rabbitmqctl list_exchanges
+```
+
+- Para listar ligações entre exchanges e fila:
+
+```commandline
+rabbitmqctl list_bindings
+```
+
