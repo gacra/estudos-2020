@@ -248,3 +248,65 @@ rabbitmqctl list_exchanges
 rabbitmqctl list_bindings
 ```
 
+**emit_log.py**
+```python
+import sys
+import pika
+
+connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+channel = connection.channel()
+
+# Damos um nome qualquer ao exchange (no caso 'logs') e declaramos que ele é
+# do tipo 'fanout'.
+channel.exchange_declare(exchange='logs', exchange_type='fanout')
+
+# Vamos declarar a fila apenas no consumidor, o produtor precisa saber apenas
+# do exchange para o qual ele vai enviar a mensagem.
+
+# Caso o produtor emita uma mensagem para o exchange e não haja uma fila
+# relacionada a ele, a mensagem será perdida, mas não há problema nesse caso.
+
+message = ' '.join(sys.argv[1:]) or 'info: Hello World!'
+
+# Ao usar o 'basic_publish' temos sempre que passar um 'routing_key',
+# entretanto nesse caso específico pode ser qualquer coisa, pois o exchange do
+# tipo fanout o ignora.
+channel.basic_publish(exchange='logs',
+                      routing_key='',
+                      body=message)
+print(' [x] Sent %r' % message)
+
+connection.close()
+```
+
+**receive_logs.py**
+```python
+import pika
+
+
+def callback(ch, method, properties, body):
+    print(' [x] %r' % body)
+
+
+connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+channel = connection.channel()
+
+channel.exchange_declare(exchange='logs', exchange_type='fanout')
+
+# Não há necessidade em dar um nome específico para a fila, uma vez que ela
+# só será usada por um único processo. O parâmetro 'exclusive' faz com que a
+# fila seja deletada quando o consumidor que a criou parar de executar.
+result = channel.queue_declare(queue='', exclusive=True)
+queue_name = result.method.queue
+
+print(queue_name)
+channel.queue_bind(exchange='logs', queue=queue_name)
+
+print(' [*] Wainting for logs. To exit press CTRL+C')
+
+channel.basic_consume(queue=queue_name,
+                      on_message_callback=callback,
+                      auto_ack=True)
+
+channel.start_consuming()
+```
