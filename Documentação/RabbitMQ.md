@@ -40,6 +40,19 @@ diversos tipos de exchages:
     P--> X --|
              |-> Fila2 --> C2
     ```
+    - direct: envia uma mensagem para uma fila se a `routing key` do binding 
+    da fila com o exchange for igual ao `routing key` com o qual a mensagem 
+    foi publicada. 
+    ```
+                 vermelho
+              |----------> fila1 --> C1
+    P --> X --|
+              |    azul
+              |----------> fila2 --> C2
+              |              ^
+              |  vermelho    |
+              |-------------- 
+    ```
 
 ### Casos de uso
 
@@ -301,6 +314,68 @@ queue_name = result.method.queue
 
 print(queue_name)
 channel.queue_bind(exchange='logs', queue=queue_name)
+
+print(' [*] Wainting for logs. To exit press CTRL+C')
+
+channel.basic_consume(queue=queue_name,
+                      on_message_callback=callback,
+                      auto_ack=True)
+
+channel.start_consuming()
+```
+
+### Aula 4 (Routing)
+
+**emit_log_direct.py**
+```python
+import sys
+import pika
+
+connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+channel = connection.channel()
+
+channel.exchange_declare(exchange='direct_logs', exchange_type='direct')
+
+severity = sys.argv[1] if len(sys.argv) > 1 else 'info'
+message = ' '.join(sys.argv[2:]) or 'Hello World!'
+
+# O exchange entregará a mensagem para todas as filas que fizeram bind com ele 
+# usando a "routing_key" especificado nesse comando.
+channel.basic_publish(exchange='direct_logs',
+                      routing_key=severity,
+                      body=message)
+print(' [x] Sent %r:%r' % (severity, message))
+
+connection.close()
+```
+
+**receive_logs_direct.py**
+```python
+import pika
+import sys
+
+
+def callback(ch, method, properties, body):
+    print(' [x] %r:%r' % (method.routing_key, body))
+
+
+connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+channel = connection.channel()
+
+channel.exchange_declare(exchange='direct_logs', exchange_type='direct')
+
+result = channel.queue_declare(queue='', exclusive=True)
+queue_name = result.method.queue
+
+severities = sys.argv[1:]
+if not severities:
+    sys.stderr.write('Usage: %s [info] [warning] [error]\n' % sys.argv[0])
+    sys.exit(1)
+
+for severity in severities:
+    channel.queue_bind(exchange='direct_logs',
+                       queue=queue_name,
+                       routing_key=severity)
 
 print(' [*] Wainting for logs. To exit press CTRL+C')
 
