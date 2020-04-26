@@ -53,6 +53,33 @@ diversos tipos de exchages:
               |  vermelho    |
               |-------------- 
     ```
+    - Topic: Semelhante ao caso anterior, entretanto possui uma maior 
+    complexidade. A `routing_key` precisa ser uma lista de termos separados 
+    por ponto (ex.: `quick.orange.rabbit`). Os termos costumam ser 
+    características atreladas às mensagens. Diferente do "direct", a chave do 
+    binding não precisa ser exatamente igual à publicada. Aqui podemos usar 2 
+    símbolos especiais para criar regras mais complexas.
+        - `*`: pode substituir extamente um termo.
+        - `#`: pode substituir zero ou mais termos.
+    
+        **Obs1:** Mensagens que casam com mais de um binding da mesma fila não 
+        são enviadas mais de uma vez para tal fila (ex: `lazy.pink.rabbit` 
+        para o caso abaixo).
+        
+        **Obs2:** Não há problema que as mensagens tenham um número de termos 
+        variáveis. Inclusive se usarmos `#` em uma chave a fila irá pegar 
+        chaves de vários tamanhos.
+    ```
+               *.orange.*
+              |----------> fila1 --> C1
+    P --> X --|
+              |*.*.rabbit
+              |----------> fila2 --> C2
+              |              ^
+              |    lazy.#    |
+              |-------------- 
+    ```
+  
 
 ### Casos de uso
 
@@ -115,7 +142,7 @@ https://www.rabbitmq.com/tutorials/tutorial-one-python.html
 container e usar:
 
 ```commandline
-sudo rabbitmqctl list_queues
+rabbitmqctl list_queues
 ```
 
 **Produtor (send.py)**
@@ -376,6 +403,69 @@ for severity in severities:
     channel.queue_bind(exchange='direct_logs',
                        queue=queue_name,
                        routing_key=severity)
+
+print(' [*] Wainting for logs. To exit press CTRL+C')
+
+channel.basic_consume(queue=queue_name,
+                      on_message_callback=callback,
+                      auto_ack=True)
+
+channel.start_consuming()
+```
+
+### Aula 5 (Topics)
+
+**emit_log_topic.py**
+
+```python
+import sys
+import pika
+
+connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+channel = connection.channel()
+
+channel.exchange_declare(exchange='topic_logs', exchange_type='topic')
+
+routing_key = sys.argv[1] if len(sys.argv) > 2 else 'anonymous.info'
+message = ' '.join(sys.argv[2:]) or 'Hello World!'
+
+channel.basic_publish(exchange='topic_logs',
+                      routing_key=routing_key,
+                      body=message)
+print(' [x] Sent %r:%r' % (routing_key, message))
+
+connection.close()
+```
+
+**receive_logs_topic.py**
+
+```python
+import pika
+import sys
+
+
+def callback(ch, method, properties, body):
+    print(' [x] %r:%r' % (method.routing_key, body))
+
+
+connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+channel = connection.channel()
+
+channel.exchange_declare(exchange='topic_logs', exchange_type='topic')
+
+result = channel.queue_declare(queue='', exclusive=True)
+queue_name = result.method.queue
+
+# Exemplos: "kern.*", "*.critical", "#", 
+binding_keys = sys.argv[1:]
+if not binding_keys:
+    sys.stderr.write('Usage: %s [binding_key]...]\n' % sys.argv[0])
+    sys.exit(1)
+
+for binding_key in binding_keys:
+    channel.queue_bind(exchange='topic_logs',
+                       queue=queue_name,
+                       routing_key=binding_key)
 
 print(' [*] Wainting for logs. To exit press CTRL+C')
 
