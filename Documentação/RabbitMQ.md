@@ -108,6 +108,16 @@ diversos tipos de exchages:
     Como exemplo, podemos citar um sistema de logging. Um processo emite um 
     log, e vários consumidores recebem esse log, cada um deles fazendo algo 
     com ela (salvar em disco, imprimir na tela, etc). 
+    
+- **Remote procedure call (RPC - Chamada de Procedimento Remoto):**
+
+    Usado quando precisamos rodar uma função em um computador remoto e 
+    aguardar o resultado. Apesar do RPC ser um padrão bem comum na computação, 
+    são necessários alguns cuidados:
+        
+    - Deixe claro no código quais funções são remotas.
+    - Trate casos de erro. Como o cliente deve reagir quando o servidor de RPC 
+    não responde por muito tempo? 
 
 ## Instalação
 
@@ -474,4 +484,122 @@ channel.basic_consume(queue=queue_name,
                       auto_ack=True)
 
 channel.start_consuming()
+```
+
+### Aula 6 (RPC)
+
+- Propriedades de mensagens enviadas comumente usadas:
+    - `delivery_mode`: Se `2` a pensagem é persistente, caso contrário não é.
+    - `content_type`: Descreve a codificação da mensagem. Por exemplo, se a 
+    mensagem está em JSON, é uma boa colocar essa propriedade como 
+    `application/json`.
+    - `reply_to`: Para indicar a fila de resposta.
+    - `correlation_id`: Usado para corelacionar respostas e requisições RPC.
+    
+- Funcionamento do RPC implementado:
+    - Quando um cliente inicia, ele cria uma fila exclusiva e anônima para 
+    respostas.
+    - Para cada requisição RPC o cliente envia uma mensagem com duas 
+    propriedades: `reply_to` com a fila de resposta e `correlation_id` com um 
+    valor único para cada requisição.
+    - A requisição é enviada para uma fila chamada `rpc_queue`.
+    - O servidor RPC fica aguardando por requisições da fila. Quando uma 
+    aparece, ele faz o trabalho e envia uma mensagem com a resposta de volta 
+    ao cliente usando a fila do campo `reply_to`.
+    - O cliente espera pelo dado na fila de resposta. Quando a mensagem 
+    parece, ele checa pelap propriedade `correlation_id`. Se ela é igual ao 
+    valor da requisição, ele retorna a resposta para a aplicação.
+
+**rpc_server.py**
+```python
+import pika
+
+connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+channel = connection.channel()
+
+channel.queue_declare(queue='rpc_queue')
+
+def fib(n):
+    if n == 0:
+        return 0
+    elif n == 1:
+        return 1
+    else:
+        return fib(n - 1) + fib(n - 2)
+
+
+def on_request(ch, method, props, body):
+    n = int(body)
+
+    print(' [.] fib(%s)' % n)
+    response = fib(n)
+
+    ch.basic_publish(exchange='',
+                     routing_key=props.reply_to,
+                     properties=pika.BasicProperties(
+                         correlation_id=props.correlation_id
+                     ),
+                     body=str(response)
+                     )
+
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
+channel.basic_qos(prefetch_count=1)
+channel.basic_consume(queue='rpc_queue', on_message_callback=on_request)
+
+print(' [x] Awaiting RPC requests')
+channel.start_consuming()
+```
+
+**rpc_client.py**
+
+```python
+import pika
+import uuid
+
+class FibonacciRpcClient:
+    def __init__(self):
+        self.connection = pika.BlockingConnection(
+            pika.ConnectionParameters('localhost'))
+
+        self.channel = self.connection.channel()
+
+        result = self.channel.queue_declare(queue='', exclusive=True)
+        self.callback_queue = result.method.queue
+
+        self.channel.basic_consume(queue=self.callback_queue,
+                                   on_message_callback=self.on_response,
+                                   auto_ack=True)
+
+        self.response = None
+        self.corr_id = None
+
+    def on_response(self, ch, method, props, body):
+        if self.corr_id == props.correlation_id:
+            self.response = body
+
+    def call(self, n):
+        self.response = None
+        self.corr_id = str(uuid.uuid4())
+        self.channel.basic_publish(
+            exchange='',
+            routing_key='rpc_queue',
+            properties=pika.BasicProperties(
+                reply_to=self.callback_queue,
+                correlation_id=self.corr_id
+            ),
+            body=str(n)
+        )
+
+        while self.response is None:
+            self.connection.process_data_events()
+        return int(self.response)
+
+fibonacci_rpc = FibonacciRpcClient()
+
+n = 2
+
+print(f' [x] Requesting fib({n})')
+response = fibonacci_rpc.call(n)
+print(' [.] Got %r' % response)
 ```
