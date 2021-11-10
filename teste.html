@@ -1,0 +1,13 @@
+<script type="text/javascript">
+	const queryString = window.location.search;
+	const urlParams = new URLSearchParams(queryString);
+	const merchant = urlParams.get('par1')
+	const item = urlParams.get('par2')
+	console.log(merchant);
+	console.log(item);
+
+	if (typeof screen.orientation !== 'undefined'){
+	    console.log(navigator.userAgent);
+	}
+ 			//window.location.href = "https://www.ifood.com.br/delivery/sao-carlos-sp/extra-hiper---sao-carlos-parque-faber-castell-i/" + merchant + '?item=' + item;
+</script>
