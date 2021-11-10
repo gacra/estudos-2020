@@ -17,9 +17,13 @@
 	console.log(merchant);
 	console.log(item);
 
-	if (typeof screen.orientation !== 'undefined'){
-	    console.log(navigator.userAgent);
+	if (typeof screen.orientation == 'undefined'){
+	    console.log('web');
+	}else {
+		alert('mobile');
 	}
  			//window.location.href = "https://www.ifood.com.br/delivery/sao-carlos-sp/extra-hiper---sao-carlos-parque-faber-castell-i/" + merchant + '?item=' + item;
 </script>
 </html>
+
+
