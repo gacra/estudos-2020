@@ -1,3 +1,6 @@
+<!DOCTYPE html>
+<html>
+<head>
 <title>Page Title</title>
 </head>
 <body>
@@ -14,10 +17,20 @@
 	console.log(merchant);
 	console.log(item);
 
-	if (typeof screen.orientation !== 'undefined'){
-	    document.getElementById("h1").innerHTML = "Web";
+	function DetectDevice() {
+	    let isMobile = window.matchMedia || window.msMatchMedia;
+	    console.log(isMobile("(pointer:coarse)"))
+	    if(isMobile) {
+	        let match_mobile = isMobile("(pointer:coarse)");
+	        return match_mobile.matches;
+	    }
+	    return false;
+	}
+
+	if (DetectDevice()){
+	    document.getElementById("h1").innerHTML = "Web2";
 	}else {
-		document.getElementById("h1").innerHTML = "Mobile";
+		document.getElementById("h1").innerHTML = "Mobile2";
 	}
  			//window.location.href = "https://www.ifood.com.br/delivery/sao-carlos-sp/extra-hiper---sao-carlos-parque-faber-castell-i/" + merchant + '?item=' + item;
 </script>
