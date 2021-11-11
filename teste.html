@@ -16,16 +16,8 @@
 	const item = urlParams.get('par2')
 	console.log(merchant);
 	console.log(item);
-
-	const isMobile = ('ontouchstart' in document.documentElement && navigator.userAgent.match(/Mobi/));
-	console.log(navigator.userAgent)
-
-	if (!isMobile){
-	    document.getElementById("h1").innerHTML = "Web2";
-	}else {
-		document.getElementById("h1").innerHTML = "Mobile2";
-	}
- 			//window.location.href = "https://www.ifood.com.br/delivery/sao-carlos-sp/extra-hiper---sao-carlos-parque-faber-castell-i/" + merchant + '?item=' + item;
- 		window.location = 'ifood://dish/' + merchant + '/' + item
+	
+ 	window.location = 'ifood://dish/' + merchant + '/' + item
+ 	window.location.href = "https://www.ifood.com.br/delivery/sao-carlos-sp/extra-hiper---sao-carlos-parque-faber-castell-i/" + merchant + '?item=' + item;
 </script>
 </html>
